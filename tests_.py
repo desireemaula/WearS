@@ -8,7 +8,7 @@ def sensing_test(smu,k, conc, diode_df_dict, diode_dict_list, mean_std, mean_std
     """
     The function `sensing_test` conducts a series of diode sensing tests and analyzes the results.
     It iterates over 20 runs, acquiring data from a diode connection each time.
-    The function calculates the mean and standard deviation of the last 5 measurements for various parameters related to 'VDL' and 'VDR'.
+    The function calculates the mean and standard deviation of the last Nlastvalues of the last Nvalidsteps for various parameters related to 'VDL' and 'VDR'.
     It then saves the collected data into Excel files. 
     
     Input:
@@ -62,43 +62,76 @@ def sensing_test(smu,k, conc, diode_df_dict, diode_dict_list, mean_std, mean_std
     
     return k, diode_df_dict, diode_dict_list, mean_std, mean_std_L, mean_std_R, folder, baseline
 
-def stability_test(smu,diode_df,mean_diff,mode,couple,DUT,TOT,max_steps):
-    stop = 0
-    step = 1
+import time
+import numpy as np
+import utils
+
+def stability_test(smu, diode_df, mean_diff, mode, couple, DUT, TOT, max_steps):
+    """
+    Perform a stability test on a device using an SMU.
+
+    Inputs:
+    - smu: An instance of the Source Measurement Unit used for measurements.
+    - diode_df: A DataFrame containing diode data collected during measurements.
+    - mean_diff: A list to calculate mean differences during the stability test.
+    - mode: The test mode controlling various parameters. ['sensing']
+    - couple: The couple used for measurements.
+    - DUT: The Device Under Test for which stability is being evaluated.
+    - TOT: Type of Test.
+    - max_steps: The maximum number of steps allowed for the stability test.
+    """
+    stop = False
+    step = 0
     mean = []
     tol_std = 0.0005
     tol_mean = 0.002
 
+    # Perform initial diode connection
     diode_df.append(smu.diode_connection(mode))
     time.sleep(10)
 
+    # Check diode connection status
     if diode_df[0]['IDL'].max() == 20 or diode_df[0]['IDR'].max() == 20:
-        raise Exception("Not Connected correctly") 
+        raise Exception("Device not connected correctly") 
 
-    while stop!=1:
+    while not stop:
         step += 1 
         print("Sweep #:", step)
+        
         if step > max_steps:
-            utils.save_xls(diode_df, DUT,TOT,couple,2)
-            raise Exception("Too many step performed and still not stable")
-        if step%5 == 0 and step!=0:
-            utils.plot_max_values(diode_df, ['baseline'], couple,step,DUT,TOT)
-            utils.plot_max_values(diode_df, ['baseline'], couple,step,DUT,TOT, mode = 3)
+            utils.save_xls(diode_df, DUT, TOT, couple, 2)
+            raise Exception("Too many steps performed without stability")
 
+        if step % 5 == 0:
+            utils.plot_max_values(diode_df, ['baseline'], couple, step, DUT, TOT)
+            utils.plot_max_values(diode_df, ['baseline'], couple, step, DUT, TOT, mode=3)
+
+        # Perform diode connection and calculate mean differences
         diode_df.append(smu.diode_connection(mode))
-        mean_diff.append(abs((diode_df[step-2]['VDL'].iloc[-10:]-diode_df[step-2]['VDR'].iloc[-10:])
-                        -(diode_df[step-1]['VDL'].iloc[-10:]-diode_df[step-1]['VDR'].iloc[-10:])).mean())
-        mean.append(abs((diode_df[step-1]['VDL'].iloc[-10:]-diode_df[step-1]['VDR'].iloc[-10:])).mean())
-        print('|VDL-VDR|: ',round(abs((diode_df[step-1]['VDL']-diode_df[step-1]['VDR']).iloc[-10:]).mean(),5))
-        print('mean diff of diff L-R :',round(np.mean(mean_diff[1:]),5))
-        print('std diff of diff L-R :',round(np.std(mean_diff[1:]),5))
-        if step >= 8: print('std of the diff for last 8', round(np.std(mean[-8+step:step]),5))
-        if (step >= 10 and (np.std(mean[-8+step:step]) < tol_std) and (np.mean(mean_diff[-8+step:step])< tol_mean)):
+        diff = abs((diode_df[step-2]['VDL'].iloc[-10:] - diode_df[step-2]['VDR'].iloc[-10:]) - 
+                   (diode_df[step-1]['VDL'].iloc[-10:] - diode_df[step-1]['VDR'].iloc[-10:])).mean() #mean (|VDL-VDR|_step(i)-|VDL-VDR|_step(i-1))
+        VDL_VDR = abs((diode_df[step-1]['VDL'].iloc[-10:] - diode_df[step-1]['VDR'].iloc[-10:])).mean()  #mean |VDL-VDR|
+        
+        mean_diff.append(diff)
+        mean.append(VDL_VDR)
+
+        # Display calculated metrics
+        print('|VDL-VDR|: ', round(VDL_VDR, 5))
+        print('mean diff of diff L-R:', round(np.mean(mean_diff[1:]), 5))
+        print('std diff of diff L-R:', round(np.std(mean_diff[1:]), 5))
+        
+        if step >= 8:
+            print('std of the diff for last 8', round(np.std(mean[-8+step:step]), 5))
+
+        # Check stability conditions
+        if (step >= 10 and np.std(mean[-8+step:step]) < tol_std and 
+                np.mean(mean_diff[-8+step:step]) < tol_mean):
             print(np.std(mean_diff[10:]))
             print('Device correctly stabilized')
-            stop = 1   
+            stop = True   
 
         time.sleep(10)
 
-    utils.save_xls(diode_df, DUT,TOT,couple,2)
+    # Save data to Excel and return results
+    utils.save_xls(diode_df, DUT, TOT, couple, 2)
     return diode_df, mean_diff

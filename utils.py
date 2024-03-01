@@ -6,8 +6,8 @@ import seaborn as sns
 import pandas as pd
 from datetime import datetime
 
-os.chdir(r"C:\Users\Desi\Desktop\TesiStanford\keithley_results")
-path =  os.getcwd()
+#os.chdir(r"C:\Users\Desi\Desktop\TesiStanford\keithley_results")
+#path =  os.getcwd()
 
 def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1):
     
@@ -58,7 +58,7 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1):
     
 def create_folder(device_name,type_of_test,additional_comment= None):
     """
-    create a new folder of the type mmddyyyy-devicename-type_of_test
+    create a new folder of the type mmddyyyy-devicename-type_of_test-additional_comment
     return path of the folder
     """
     today = datetime.now()
