@@ -1,0 +1,104 @@
+import utils
+import time
+import numpy as np
+import pandas as pd
+from datetime import datetime
+
+def sensing_test(smu,k, conc, diode_df_dict, diode_dict_list, mean_std, mean_std_L, mean_std_R,DUT, TOT, couple, baseline ):
+    """
+    The function `sensing_test` conducts a series of diode sensing tests and analyzes the results.
+    It iterates over 20 runs, acquiring data from a diode connection each time.
+    The function calculates the mean and standard deviation of the last 5 measurements for various parameters related to 'VDL' and 'VDR'.
+    It then saves the collected data into Excel files. 
+    
+    Input:
+    - `k`: Index for data management.
+    - `conc`: str list of different concentrations.
+    - `diode_df_dict`: dictionary where to store the df with the 20 sweeps of all the concentrations
+    - `diode_dict_list`: dictionary where to store the list with the 20 sweeps of all the concentrations
+    - `mean_std`, `mean_std_L`, `mean_std_R`: Lists for storing statistical data.
+
+    """
+    stop = 0
+    step = 1
+    tol = 0.001
+    Nvalidsteps = 6
+    Nlastvalues = 5
+    diode_df_list = []
+    
+    # Loop for 20 runs
+    for i in range(20):
+        print('Run #:',i+1)
+        diode_df_list.append(smu.diode_connection('sensing'))
+        time.sleep(10) # Wait for 10 seconds before the next run
+
+    data_save = pd.concat(diode_df_list)  # saving the 20 sweeps in one df
+    data_save['DIFFV'] = abs(data_save['VDL']- data_save['VDR']) # Calculate the difference between 'VDL' and 'VDR' and add it as a new column
+    
+    # Store dataframes and lists into dictionaries
+    diode_df_dict[conc[k]] = data_save  
+    diode_dict_list[conc[k]] = diode_df_list
+    
+    # Calculate mean and standard deviation of the last 5 measurements
+    mean_last5 = np.mean([(subdf['VDL'].iloc[-Nlastvalues:]-subdf['VDR'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]])
+    std_last5 = np.std(np.mean([(subdf['VDL'].iloc[-Nlastvalues:]-subdf['VDR'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
+    mean_std.append([mean_last5, std_last5])
+
+    mean_last5_L = np.mean([(subdf['VDL'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]])
+    std_last5_L = np.std(np.mean([(subdf['VDL'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
+    mean_std_L.append([mean_last5_L, std_last5_L])
+
+    mean_last5_R = np.mean([(subdf['VDR'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]])
+    std_last5_R = np.std(np.mean([(subdf['VDR'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
+    mean_std_R.append([mean_last5_R, std_last5_R])
+
+    # Save dataframes to Excel files
+    folder = utils.save_xls(diode_df_dict, DUT,TOT,couple+'-AS-'+conc[k])
+    
+    if k == 0: baseline = mean_std[0][0]
+    mean_std[k][0] = mean_std[k][0]-baseline
+    k = k+1
+    print(mean_std)
+    
+    return k, diode_df_dict, diode_dict_list, mean_std, mean_std_L, mean_std_R, folder, baseline
+
+def stability_test(smu,diode_df,mean_diff,mode,couple,DUT,TOT,max_steps):
+    stop = 0
+    step = 1
+    mean = []
+    tol_std = 0.0005
+    tol_mean = 0.002
+
+    diode_df.append(smu.diode_connection(mode))
+    time.sleep(10)
+
+    if diode_df[0]['IDL'].max() == 20 or diode_df[0]['IDR'].max() == 20:
+        raise Exception("Not Connected correctly") 
+
+    while stop!=1:
+        step += 1 
+        print("Sweep #:", step)
+        if step > max_steps:
+            utils.save_xls(diode_df, DUT,TOT,couple,2)
+            raise Exception("Too many step performed and still not stable")
+        if step%5 == 0 and step!=0:
+            utils.plot_max_values(diode_df, ['baseline'], couple,step,DUT,TOT)
+            utils.plot_max_values(diode_df, ['baseline'], couple,step,DUT,TOT, mode = 3)
+
+        diode_df.append(smu.diode_connection(mode))
+        mean_diff.append(abs((diode_df[step-2]['VDL'].iloc[-10:]-diode_df[step-2]['VDR'].iloc[-10:])
+                        -(diode_df[step-1]['VDL'].iloc[-10:]-diode_df[step-1]['VDR'].iloc[-10:])).mean())
+        mean.append(abs((diode_df[step-1]['VDL'].iloc[-10:]-diode_df[step-1]['VDR'].iloc[-10:])).mean())
+        print('|VDL-VDR|: ',round(abs((diode_df[step-1]['VDL']-diode_df[step-1]['VDR']).iloc[-10:]).mean(),5))
+        print('mean diff of diff L-R :',round(np.mean(mean_diff[1:]),5))
+        print('std diff of diff L-R :',round(np.std(mean_diff[1:]),5))
+        if step >= 8: print('std of the diff for last 8', round(np.std(mean[-8+step:step]),5))
+        if (step >= 10 and (np.std(mean[-8+step:step]) < tol_std) and (np.mean(mean_diff[-8+step:step])< tol_mean)):
+            print(np.std(mean_diff[10:]))
+            print('Device correctly stabilized')
+            stop = 1   
+
+        time.sleep(10)
+
+    utils.save_xls(diode_df, DUT,TOT,couple,2)
+    return diode_df, mean_diff
