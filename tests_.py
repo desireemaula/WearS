@@ -11,14 +11,34 @@ def sensing_test(L, R, C, smu,k, conc, diode_df_dict, diode_dict_list, mean_std,
     The function calculates the mean and standard deviation of the last Nlastvalues of the last Nvalidsteps for various parameters related to 'VDL' and 'VDR'.
     It then saves the collected data into Excel files. 
     
-    Input:
-    - `k`: Index for data management.
-    - `conc`: str list of different concentrations.
-    - `diode_df_dict`: dictionary where to store the df with the 20 sweeps of all the concentrations
-    - `diode_dict_list`: dictionary where to store the list with the 20 sweeps of all the concentrations
-    - `mean_std`, `mean_std_L`, `mean_std_R`: Lists for storing statistical data.
-    - `L`,`R`, `C`: 'CH1', 'CH2' or 'CH3'
-
+    Parameters:
+    - L (str): Left probe [CH1,CH2,CH3].
+    - R (str): Right probe [CH1,CH2,CH3]
+    - C (str): Common probe [CH1,CH2,CH3].
+    L,R,C are the only parameters you should change in this function
+    
+    - smu (object):smu object.
+    - k (int): Index for data management.
+    - conc (list of str): List of different concentrations.
+    - diode_df_dict (dict): Dictionary where to store the DataFrame with the 20 sweeps of all the concentrations.
+    - diode_dict_list (dict): Dictionary where to store the list with the 20 sweeps of all the concentrations.
+    - mean_std (list): Lists for storing statistical data.
+    - mean_std_L (list): Lists for storing statistical data related to 'VDL'.
+    - mean_std_R (list): Lists for storing statistical data related to 'VDR'.
+    - DUT (str): Description of DUT parameter.
+    - TOT (str): Description of TOT parameter.
+    - couple (str): Description of FET couple parameter.
+    - baseline (float): Baseline value for calculations.
+    
+    Returns:
+    - k (int): Updated index for data management.
+    - diode_df_dict (dict): Updated dictionary with the DataFrame with the 20 sweeps of all the concentrations.
+    - diode_dict_list (dict): Updated dictionary with the list with the 20 sweeps of all the concentrations.
+    - mean_std (list): Updated lists for storing statistical data.
+    - mean_std_L (list): Updated lists for storing statistical data related to 'VDL'.
+    - mean_std_R (list): Updated lists for storing statistical data related to 'VDR'.
+    - folder (str): Name of the directory where the Excel file is saved.
+    - baseline (float): Baseline value for calculations.
     """
     stop = 0
     step = 1
@@ -57,10 +77,6 @@ def sensing_test(L, R, C, smu,k, conc, diode_df_dict, diode_dict_list, mean_std,
     print(mean_std)
     
     return k, diode_df_dict, diode_dict_list, mean_std, mean_std_L, mean_std_R, folder, baseline
-
-import time
-import numpy as np
-import utils
 
 def stability_test(L, R, C, smu, diode_df, mean_diff, mode, couple, DUT, TOT, max_steps):
     """

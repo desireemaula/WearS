@@ -10,6 +10,22 @@ from datetime import datetime
 path =  os.getcwd()
 
 def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None):
+     """
+    Plot the change of max values over time.
+    
+    Parameters:
+    - list_df (list or dict): List or dictionary containing DataFrame objects.
+    - conc (list): List of concentrations.
+    - couple (str): Description of the FET couple under test.
+    - step (str): Description of the step.
+    - DUT (str): Description of the DUT.
+    - TOT (str): Description of the TOT.
+    - mode (int, optional): Mode for plotting. Default is 1. if mode = 2 -> VDL and VDR are plotted. If mode = 2: VDL, VDR, VDL-VDR are plotted
+    - folder (str, optional): Folder to save the plot image. Default is None.
+
+    Returns:
+    - None
+    """
     
     # If list_df is a list
     if isinstance(list_df, list):
@@ -60,6 +76,11 @@ def create_folder(device_name,type_of_test,additional_comment= None):
     """
     create a new folder of the type mmddyyyy-devicename-type_of_test-additional_comment
     return path of the folder
+    
+    Parameters:
+    - device_name (str): name of the DUT
+    - type_of_test (str): TOT
+    - additional_comment (str): remark you might want to add in the folder name
     """
     today = datetime.now()
     if additional_comment:
@@ -71,9 +92,18 @@ def create_folder(device_name,type_of_test,additional_comment= None):
 
                  
 def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 1):
-    """
-    Save a list of dataframes to an excel file, 
-    with each dataframe as a separate page
+     """
+    Save a list of DataFrames to an Excel file, with each DataFrame as a separate sheet.
+
+    Parameters:
+    - list_df (list or dict): List or dictionary containing DataFrame objects.
+    - device_name (str): Name of the device.
+    - type_of_test (str): Type of test performed.
+    - additional_comment (str, optional): Additional comment to include in the file name. Default is None.
+    - mode (int, optional): Mode for saving the Excel file. Default is 1.
+
+    Returns:
+    - directory (str): Name of the directory where the Excel file is saved.
     """  
     today = datetime.now()
     if os.path.isdir(today.strftime('%m%d%Y')+'-'+device_name+'-'+type_of_test)!=1:
@@ -95,12 +125,28 @@ def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 
             list_df[str(key)].to_excel(writer, sheet_name="step #" + str(key))   
         
     else:
-        for key in range(len(list_df)):
+        for key, df in enumerate(list_df):
             list_df[key].to_excel(writer, sheet_name="step #" + str(key))
     writer.close()
     return directory
     
 def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = None):
+    """
+    Plot mean and standard deviation for left and right sides.
+
+    Parameters:
+    - k (int): Number of concentration you want to show.
+    - mean_std_L (list): List of mean and standard deviation for the VDL.
+    - mean_std_R (list): List of mean and standard deviation for the VDR.
+    - mean_std (list): List of mean and standard deviation for VDL-VDR.
+    - conc (list): List of concentrations.
+    - couple (str): Description of the FET couple.
+    - folder (str, optional): Folder to save the plot image. Default is None.
+
+    Returns:
+    - None
+    """ 
+    
     fig, ax = plt.subplots(figsize = (10,8))
     L = [i[0]*1000 - mean_std_L[0][0]*1000 for i in mean_std_L]
     R = [i[0]*1000 - mean_std_R[0][0]*1000 for i in mean_std_R]
@@ -118,9 +164,24 @@ def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = Non
     if folder : plt.savefig(folder+"\meanL_R_diff_last5-"+couple+".png")
     
 def calculate_mean_std(Nlastvalues,Nvalidsteps,df_list, column):
-    mean = np.mean([(subdf[column].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]])
-    std = np.std(np.mean([(subdf[column].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
-    return mean,std
+    """
+    Calculate the mean and standard deviation of the specified column from the last Nlastvalues values
+    of the last Nvalidsteps steps in the given list of DataFrames.
+
+    Parameters:
+    - Nlastvalues (int): Number of last values to consider for calculating mean and standard deviation.
+    - Nvalidsteps (int): Number of last steps to consider for calculating mean and standard deviation.
+    - df_list (list): List of DataFrame objects.
+    - column (str): Name of the column for which mean and standard deviation are calculated.
+
+    Returns:
+    - mean (float): Mean value of the specified column from the last Nlastvalues values of the last Nvalidsteps steps.
+    - std (float): Standard deviation of the specified column from the last Nlastvalues values of the last Nvalidsteps steps.
+    """
+    last_values = np.array([subdf[column].iloc[-Nlastvalues:].values for subdf in df_list[-Nvalidsteps:]])
+    mean = np.mean(last_values)
+    std = np.std(np.mean(last_values, axis=1))
+    return mean, std
    
     
 def calculate_vth(datax,datay, plot = None):
