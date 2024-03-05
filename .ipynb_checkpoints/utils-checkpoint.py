@@ -7,9 +7,9 @@ import pandas as pd
 from datetime import datetime
 
 #os.chdir(r"C:\Users\Desi\Desktop\TesiStanford\keithley_results")
-#path =  os.getcwd()
+path =  os.getcwd()
 
-def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1):
+def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None):
     
     # If list_df is a list
     if isinstance(list_df, list):
@@ -52,7 +52,7 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1):
     plt.title('Change of Max values in time')
     plt.grid()
     plt.legend()
-    plt.savefig(r"C:\Users\Desi\Desktop\TesiStanford\images-results\-"+couple+"-"+DUT+TOT+"-step"+str(step)+".jpeg")
+    if folder : plt.savefig(folder+"\plotmaxvalues-"+couple+"-"+DUT+TOT+".jpeg")
     plt.show()
     
     
@@ -112,7 +112,47 @@ def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = Non
     plt.errorbar(conc[:k], R, yerr=[i[1]*1000 for i in mean_std_R], label='std_R')
     plt.xlabel('Concentration')
     plt.ylabel('DeltaV [mV]')
-    plt.title('Mean and Std DeltaV dor different concentrartions (last 5 values of the last 6 steps)')
+    plt.title('Mean and Std DeltaV dor different concentrations (last 5 values of the last 6 steps)')
     plt.legend()
     plt.grid()
     if folder : plt.savefig(folder+"\meanL_R_diff_last5-"+couple+".png")
+    
+def calculate_vth(datax,datay, plot = None):
+    """
+    Compute the Vth starting from a VGS-IDS curve in the saturation regime with linear extrapolation
+    and plot the corresponding curves if plot = None
+    Input:
+        datax = X axis data (VGS) 
+        datay = Y axis data (IDS) -> non squared! 
+        
+    """
+    sqrty =  np.sqrt(datay)
+    
+    IdS_derivative = np.gradient(sqrty, datax)
+    # Find the max derivative point
+    index_max_derivative = np.argmax(IdS_derivative)
+    vgs_max_derivative = vgs[index_max_derivative]
+
+    # Compute Vth using the linear extrapolation with y = 0 (IdS = 0)
+    Vth = -sqrty[index_max_derivative]/np.max(IdS_derivative)+vgs_max_derivative
+    
+    if plot:
+        plt.plot(vgs, tangent_equation, 'g--', label='Tangente')
+        # Plot della curva IdS vs vgs e del punto di massima derivata
+        plt.plot(vgs, IdS_sqrt, 'bo', label='sqroot(IdS)')
+        plt.xlabel('$v_{gs}$ (V)')
+        plt.ylabel('$IdS$ (A)')
+        plt.title('Curva IdS vs vgs')
+        plt.plot(vgs_max_derivative, IdS_max_derivative, 'ro', label=f'Point of Max derivate: {vgs_max_derivative:.2f} V')  # Punto di massima derivata
+        plt.plot(Vth, 0, 'mo', label=f'Vth: {Vth:.2f} V')  # Punto di massima derivata
+
+        plt.ylim(-0.0001, 0.0011)
+        plt.xlabel('$v_{gs}$ (V)')
+        plt.ylabel('$IdS$ (A)')
+        plt.title('IdS vsVvgs Curve')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+        
+    return Vth
