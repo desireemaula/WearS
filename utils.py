@@ -162,3 +162,17 @@ def calculate_vth(datax,datay, plot = None):
 
         
     return Vth
+
+def save_table_xlsx(data, name_columns = None, TOT, name_file):
+    """
+    save the data in an xlsx file of the type 'mmddyyyy-name_file' in the main path
+    input:
+        data = np array of data to save in the xlsx file (i.e., [mean_L, std_L, mean_R, std_L], where mean_L etc are array of data)
+        name_columns = str array to name the columns of the table with (non mandatory)
+        TOT = str - type of test
+        name_file = str - name of the table
+    """
+    path = create_folder('_',TOT)
+    table = pd.DataFrame(data).transpose().rename(columns = {0: 'Mean_L [mV]', 1: 'std_L [mV]', 2: 'Mean_R [mV]', 3: 'std_R [mV]', 4: 'Diff |Vl-VR| [mV]', 5: 'std diff [mV]'})
+    table.to_excel(path+"\_"+name_file+".xlsx")
+    return
