@@ -3,12 +3,12 @@
 The repository provides three py files:
 
 - utils.py: contains functions like:
-  -plot_max_values
-  -create_folder
-  -save_xsl
-  -plot_mean_std
-  -calculate_mean_std
-  -calculate_vth
+  - plot_max_values
+  - create_folder
+  - save_xsl
+  - plot_mean_std
+  - calculate_mean_std
+  - calculate_vth
 - tests.py: contains functions like:
   - sensing_test
   - stability_test
