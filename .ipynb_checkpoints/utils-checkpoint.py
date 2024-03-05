@@ -97,7 +97,7 @@ def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 
     else:
         for key in range(len(list_df)):
             list_df[key].to_excel(writer, sheet_name="step #" + str(key))
-    writer.save()
+    writer.close()
     return directory
     
 def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = None):
@@ -116,6 +116,12 @@ def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = Non
     plt.legend()
     plt.grid()
     if folder : plt.savefig(folder+"\meanL_R_diff_last5-"+couple+".png")
+    
+def calculate_mean_std(Nlastvalues,Nvalidsteps,df_list, column):
+    mean = np.mean([(subdf[column].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]])
+    std = np.std(np.mean([(subdf[column].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
+    return mean,std
+   
     
 def calculate_vth(datax,datay, plot = None):
     """
