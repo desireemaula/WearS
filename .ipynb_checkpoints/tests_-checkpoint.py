@@ -61,12 +61,12 @@ def sensing_test(L, R, C, smu,k, conc, diode_df_dict, diode_dict_list, mean_std,
     diode_dict_list[conc[k]] = diode_df_list
     
     # Calculate mean and standard deviation of the last 5 measurements
-    mean_last5 = (calculate_mean_std(Nlastvalues,Nvalidsteps,df_list,'VDL')[0]-calculate_mean_std(Nlastvalues,Nvalidsteps,df_list,'VDL')[0])
+    mean_last5 = (utils.calculate_mean_std(Nlastvalues,Nvalidsteps,diode_df_list,'VDL')[0]-utils.calculate_mean_std(Nlastvalues,Nvalidsteps,diode_df_list,'VDR')[0])
     std_last5 = np.std(np.mean([(subdf['VDL'].iloc[-Nlastvalues:]-subdf['VDR'].iloc[-Nlastvalues:]).values for subdf in diode_df_list[-Nvalidsteps:]],1))
     
     mean_std.append([mean_last5, std_last5])
-    mean_std_L.append([calculate_mean_std(Nlastvalues,Nvalidsteps,df_list,'VDL')])
-    mean_std_R.append([calculate_mean_std(Nlastvalues,Nvalidsteps,df_list,'VDR')])
+    mean_std_L.append(utils.calculate_mean_std(Nlastvalues,Nvalidsteps,diode_df_list,'VDL'))
+    mean_std_R.append(utils.calculate_mean_std(Nlastvalues,Nvalidsteps,diode_df_list,'VDR'))
 
     # Save dataframes to Excel files
     folder = utils.save_xls(diode_df_dict, DUT,TOT,couple+'-AS-'+conc[k])
@@ -78,7 +78,7 @@ def sensing_test(L, R, C, smu,k, conc, diode_df_dict, diode_dict_list, mean_std,
     
     return k, diode_df_dict, diode_dict_list, mean_std, mean_std_L, mean_std_R, folder, baseline
 
-def stability_test(L, R, C, smu, diode_df, mean_diff, mode, couple, DUT, TOT, max_steps):
+def stability_test(L, R, C, smu, diode_df, mean_diff, mode, couple, DUT, TOT, max_steps, resting_time):
     """
     Perform a stability test on a device using an SMU.
 
@@ -102,7 +102,7 @@ def stability_test(L, R, C, smu, diode_df, mean_diff, mode, couple, DUT, TOT, ma
     # Perform initial diode connection
     current_stop = '300E-09' if mode == 'sensing' else '1E-06'
     diode_df.append(smu.diode_connection(L, R, C, '0', current_stop, '5E-09'))
-    time.sleep(10)
+    time.sleep(resting_time)
 
     # Check diode connection status
     if diode_df[0]['IDL'].max() == 20 or diode_df[0]['IDR'].max() == 20:
@@ -144,7 +144,75 @@ def stability_test(L, R, C, smu, diode_df, mean_diff, mode, couple, DUT, TOT, ma
             print('Device correctly stabilized')
             stop = True   
 
-        time.sleep(10)
+        time.sleep(resting_time)
+
+    # Save data to Excel and return results
+    utils.save_xls(diode_df, DUT, TOT, couple, 2)
+    return diode_df, mean_diff
+
+
+def stability_test_egofet(gsd, smu, vds, compliance_vds, vg_start,vg_stop,vg_step, compliance_vg, speed, vgsids, mean_diff, TOT, max_steps, resting_time, hysteresis = None ):
+    """
+    Perform a stability test on a egofet using an SMU.
+
+    Inputs:
+    - smu: An instance of the Source Measurement Unit used for measurements.
+    - diode_df: A DataFrame containing diode data collected during measurements.
+    - mean_diff: A list to calculate mean differences during the stability test.
+    - mode: The test mode controlling various parameters. ['sensing']
+    - couple: The couple used for measurements.
+    - DUT: The Device Under Test for which stability is being evaluated.
+    - TOT: Type of Test.
+    - max_steps: The maximum number of steps allowed for the stability test.
+    - L,R,C: 'CH1', 'CH2', or 'CH3'
+    """
+    stop = False
+    step = 0
+    mean = []
+    tol_std = 0.0005
+    tol_mean = 0.002
+
+    # Perform initial diode connection
+    vgsids.append(smu.VgsIds(gsd[0], gsd[1], gsd[2], vds, compliance_vds, vg_start,vg_stop,vg_step, compliance_vg, speed))
+    time.sleep(resting_time)
+
+    while not stop:
+        step += 1 
+        print("Sweep #:", step)
+        
+        if step > max_steps:
+            utils.save_xls(vgsids, DUT, TOT, couple, 2)
+            raise Exception("Too many steps performed without stability")
+
+        if step % 5 == 0:
+            utils.plot_max_values(vgsids, ['baseline'], couple, step, DUT, TOT)
+            utils.plot_max_values(vgsids, ['baseline'], couple, step, DUT, TOT, mode=3)
+
+        # Perform diode connection and calculate mean differences
+        vgsids.append(smu.VgsIds(L, R, C, '0', current_stop, '5E-09'))
+        diff = abs((vgsids[step-2]['VDL'].iloc[-10:] - vgsids[step-2]['VDR'].iloc[-10:]) - 
+                   (vgsids[step-1]['VDL'].iloc[-10:] - vgsids[step-1]['VDR'].iloc[-10:])).mean() #mean (|VDL-VDR|_step(i)-|VDL-VDR|_step(i-1)) of the last 10 values
+        VDL_VDR = abs((diode_df[step-1]['VDL'].iloc[-10:] - diode_df[step-1]['VDR'].iloc[-10:])).mean()  #mean |VDL-VDR| of the last 10 values
+        
+        mean_diff.append(diff)
+        mean.append(VDL_VDR)
+
+        # Display calculated metrics
+        print('|VDL-VDR|: ', round(VDL_VDR, 5))
+        print('mean diff of diff L-R:', round(np.mean(mean_diff[1:]), 5))
+        print('std diff of diff L-R:', round(np.std(mean_diff[1:]), 5))
+        
+        if step >= 8:
+            print('std of the diff for last 8', round(np.std(mean[-8+step:step]), 5))
+
+        # Check stability conditions
+        if (step >= 10 and np.std(mean[-8+step:step]) < tol_std and 
+                np.mean(mean_diff[-8+step:step]) < tol_mean):
+            print(np.std(mean_diff[10:]))
+            print('Device correctly stabilized')
+            stop = True   
+
+        time.sleep(resting_time)
 
     # Save data to Excel and return results
     utils.save_xls(diode_df, DUT, TOT, couple, 2)

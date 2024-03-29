@@ -139,29 +139,30 @@ class Communications:
 
         return response
     
-    def VgsIds(self):
+    def VgsIds(self, gate, source, drain, vds, compliance_vds, vg_start,vg_stop,vg_step, compliance_vg, speed, hysteresis = None):
         """
         VgsIds program
+        gate, source, drain: str of the channel ['CH1','CH2','CH3']
         """
         
-        self._instrument_object.query("DE")
-        self._instrument_object.query("CH2, 'VG', 'IG', 1, 1")
-        self._instrument_object.query("CH1, 'VD', 'ID', 1, 3")
-        self._instrument_object.query("CH3, 'VS', 'IS', 1, 3")
+        self._instrument_object.query("DE") # channel definition page
+        self._instrument_object.query(gate+", 'VG', 'IG', 1, 1")
+        self._instrument_object.query(drain+", 'VD', 'ID', 1, 3")
+        self._instrument_object.query(source+", 'VS', 'IS', 1, 3")
         self._instrument_object.query("SS")
-        self._instrument_object.query("VR1, 2, -5, -0.05, 100e-3")
-        self._instrument_object.query("VC3, -5, 0.01")
-        self._instrument_object.query("VC1, 0, 0.1")
+        self._instrument_object.query("VR"+gate[2]+", "+vg_start+", "+vg_stop+", "+vg_step+", "+compliance_vg)
+        self._instrument_object.query("VC"+drain[2]+", "+vds+", "+compliance_vds)
+        self._instrument_object.query("VC"+source[2]+", 0, 0.1")
         self._instrument_object.query("HT 0")
         self._instrument_object.query("DT 0.001")
-        self._instrument_object.query("IT2")
+        self._instrument_object.query("IT"+speed)
         self._instrument_object.query("RS 5")
-        self._instrument_object.query("RG 1, 1e-6")
-        self._instrument_object.query("RG 2, 1e-6")
-        self._instrument_object.query("RG 3, 1e-6")
+        self._instrument_object.query("RG 1, 1e-9")
+        self._instrument_object.query("RG 2, 1e-9")
+        #self._instrument_object.query("RG 3, 1e-9")
         self._instrument_object.query("SM")
         self._instrument_object.query("DM1")
-        self._instrument_object.query("XN 'VG', 1, -5, 2")
+        self._instrument_object.query("XN 'VG', 1,"+vg_start+", "+vg_stop)
         self._instrument_object.query("YA 'ID', 1, 0, 0.04")
         self._instrument_object.query("YB 'IG', 1, 0, 0.04")
         self._instrument_object.query("MD")
@@ -173,47 +174,55 @@ class Communications:
             status = self._instrument_object.query("SP")
             time.sleep(1)
 
-        dataID1 = self._instrument_object.query("DO'ID'")
+        dataID1 = self._instrument_object.query("DO 'ID'")
         dataVG1 = self._instrument_object.query("DO 'VG'")
         dataIG1 = self._instrument_object.query("DO 'IG'")
+        dataVD1 = self._instrument_object.query("DO 'VD'")
+        
+        if hysteresis:
+            self._instrument_object.query("SS")
+            self._instrument_object.query("VR"+gate[2]+", "+str(float(vg_stop)+float(vg_step))+", "+vg_start+", "+str(-float(vg_step))+", "+compliance_vg)
+            self._instrument_object.query("VC"+drain[2]+", "+vds+", "+compliance_vds)
+            self._instrument_object.query("VC"+source[2]+", 0, 0.1")
+            self._instrument_object.query("HT 0")
+            self._instrument_object.query("DT 0.001")
+            self._instrument_object.query("IT2")
+            self._instrument_object.query("RS 5")
+            self._instrument_object.query("RG 1, 1e-9")
+            self._instrument_object.query("RG 2, 1e-9")
+            #self._instrument_object.query("RG 3, 1e-9")
+            self._instrument_object.query("SM")
+            self._instrument_object.query("DM1")
+            self._instrument_object.query("XN 'VG', 1,"+vg_start+", "+vg_stop)
+            self._instrument_object.query("YA 'ID', 1, 0, 0.04")
+            self._instrument_object.query("YB 'IG', 1, 0, 0.04")
+            self._instrument_object.query("MD")
+            self._instrument_object.query("ME1")
 
-        self._instrument_object.query("SS")
-        self._instrument_object.query("VR1, -4.95, 2, 0.05, 0.001")
-        self._instrument_object.query("VC3, -5, 0.01")
-        self._instrument_object.query("VC1, 0, 0.1")
-        self._instrument_object.query("HT 0")
-        self._instrument_object.query("DT 0.001")
-        self._instrument_object.query("IT2")
-        self._instrument_object.query("RS 5")
-        self._instrument_object.query("RG 1, 1e-6")
-        self._instrument_object.query("RG 2, 1e-6")
-        self._instrument_object.query("RG 3, 1e-6")
-        self._instrument_object.query("SM")
-        self._instrument_object.query("DM1")
-        self._instrument_object.query("XN 'VG', 1, -5, 2")
-        self._instrument_object.query("YA 'ID', 1, 0, 0.04")
-        self._instrument_object.query("YB 'IG', 1, 0, 0.04")
-        self._instrument_object.query("MD")
-        self._instrument_object.query("ME1")
-
-        status = self._instrument_object.query("SP")
-        while int(status) != 1:
             status = self._instrument_object.query("SP")
-            time.sleep(1)
+            while int(status) != 1:
+                status = self._instrument_object.query("SP")
+                time.sleep(1)
 
-        dataID2 = self._instrument_object.query("DO'ID'")
-        dataVG2 = self._instrument_object.query("DO 'VG'") #try with the T, VGT
-        dataIG2 = self._instrument_object.query("DO 'IG'")
+            dataID2 = self._instrument_object.query("DO'ID'")
+            dataVG2 = self._instrument_object.query("DO 'VG'") #try with the T, VGT
+            dataIG2 = self._instrument_object.query("DO 'IG'")
+            dataVD2 = self._instrument_object.query("DO 'VD'")
 
         data = pd.DataFrame()
-        data['Id1'] = pd.Series(str(dataID1).split(dataID1[0])[1:]).apply(lambda x: float(x[:-1]))
-        data['Id2'] = pd.concat(data['Id1'].loc[0],pd.Series(str(dataID2).split(dataID2[0])[1:]).apply(lambda x: float(x[:-1])))
-        data['Ig1'] = pd.Series(str(dataIG1).split(dataIG1[0])[1:]).apply(lambda x: float(x[:-1]))
-        data['Ig2'] = pd.Series(str(dataIG2).split(dataIG2[0])[1:]).apply(lambda x: float(x[:-1]))
+        data['Id1'] = pd.Series(str(dataID1).split(dataID1[0])[1:]).apply(lambda x: float(x[:-1]))       
+        data['Ig1'] = pd.Series(str(dataIG1).split(dataIG1[0])[1:]).apply(lambda x: float(x[:-1]))        
         data['Vg1'] = pd.Series(str(dataVG1).split(dataVG1[0])[1:]).apply(lambda x: float(x[:-1]))
-        #data['Vg2'] = pd.Series(str(dataVG2).split(dataVG2[0])[1:]).apply(lambda x: float(x[:-1]))
+        data['Vd1'] = pd.Series(str(dataVD1).split(dataVD1[0])[1:]).apply(lambda x: float(x[:-1]))
+        
+        if hysteresis:
+            #data['Id2'] = pd.concat([pd.Series(data['Id1'].loc[0]),pd.Series(str(dataID2).split(dataID2[0])[1:]).apply(lambda x: float(x[:-1]))])
+            x =  pd.Series(str(dataIG2).split(dataID2[0])[1:]).apply(lambda x: float(x[:-1]))
+            data['Ig2'] = pd.Series(str(dataIG2).split(dataIG2[0])[1:]).apply(lambda x: float(x[:-1]))
+            data['Vg2'] = pd.Series(str(dataVG2).split(dataVG2[0])[1:]).apply(lambda x: float(x[:-1]))
+            data['Vd2'] = pd.Series(str(dataVD2).split(dataVD2[0])[1:]).apply(lambda x: float(x[:-1]))
 
-        return data
+        return data, x
     
     
     def diode_connection_constantbias(self, mode = None):

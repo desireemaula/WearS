@@ -5,12 +5,13 @@ import time
 import seaborn as sns
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 #os.chdir(r"C:\Users\Desi\Desktop\TesiStanford\keithley_results")
 path =  os.getcwd()
 
 def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None):
-     """
+    """
     Plot the change of max values over time.
     
     Parameters:
@@ -71,8 +72,11 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None)
     if folder : plt.savefig(folder+"\plotmaxvalues-"+couple+"-"+DUT+TOT+".jpeg")
     plt.show()
     
+    return
+    
     
 def create_folder(device_name,type_of_test,additional_comment= None):
+    
     """
     create a new folder of the type mmddyyyy-devicename-type_of_test-additional_comment
     return path of the folder
@@ -92,7 +96,7 @@ def create_folder(device_name,type_of_test,additional_comment= None):
 
                  
 def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 1):
-     """
+    """
     Save a list of DataFrames to an Excel file, with each DataFrame as a separate sheet.
 
     Parameters:
@@ -106,6 +110,7 @@ def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 
     - directory (str): Name of the directory where the Excel file is saved.
     """  
     today = datetime.now()
+    path = os.getcwd()
     if os.path.isdir(today.strftime('%m%d%Y')+'-'+device_name+'-'+type_of_test)!=1:
         directory = create_folder(device_name,type_of_test)
         print('The directory doesn\'t exist')
@@ -146,22 +151,32 @@ def plot_mean_std(k, mean_std_L,mean_std_R, mean_std, conc, couple, folder = Non
     Returns:
     - None
     """ 
+    col_L = '#1E5986'
+    col_R = '#BF8F00'
+    col_diff = "#FF8080"
     
-    fig, ax = plt.subplots(figsize = (10,8))
+    fig, ax = plt.subplots(figsize = (11.69,8.26))
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.spines['top'].set_linewidth(1.5)
+    ax.spines['left'].set_linewidth(1.5)
+    ax.spines['right'].set_linewidth(1.5)
+    ax.tick_params(axis='both', width=1.5, length=8, labelsize=26)
+
+
     L = [i[0]*1000 - mean_std_L[0][0]*1000 for i in mean_std_L]
     R = [i[0]*1000 - mean_std_R[0][0]*1000 for i in mean_std_R]
-    plt.scatter(conc[:k], [i[0]*1000 for i in mean_std] )
-    plt.errorbar(conc[:k], [i[0]*1000 for i in mean_std], yerr=[i[1]*1000 for i in mean_std], label='std')
-    plt.scatter(conc[:k], L )
-    plt.errorbar(conc[:k], L, yerr=[i[1]*1000 for i in mean_std_L], label='std_L')
-    plt.scatter(conc[:k], R )
-    plt.errorbar(conc[:k], R, yerr=[i[1]*1000 for i in mean_std_R], label='std_R')
-    plt.xlabel('Concentration')
-    plt.ylabel('DeltaV [mV]')
-    plt.title('Mean and Std DeltaV dor different concentrations (last 5 values of the last 6 steps)')
-    plt.legend()
-    plt.grid()
-    if folder : plt.savefig(folder+"\meanL_R_diff_last5-"+couple+".png")
+    plt.scatter(conc[:k], [i[0]*1000 for i in mean_std], color = col_diff, label='Diff OFET' , linewidth = 3)
+    plt.errorbar(conc[:k], [i[0]*1000 for i in mean_std], yerr=[i[1]*1000 for i in mean_std], color = col_diff, linewidth = 3)
+    plt.scatter(conc[:k], L , color = col_L, label='Left OFET', linewidth = 3)
+    plt.errorbar(conc[:k], L, yerr=[i[1]*1000 for i in mean_std_L], color = col_L, linewidth = 3)
+    plt.scatter(conc[:k], R , color = col_R, label='Right OFET', linewidth = 3)
+    plt.errorbar(conc[:k], R, yerr=[i[1]*1000 for i in mean_std_R], color = col_R, linewidth = 3)
+    plt.xlabel('Concentration', fontsize = 36)
+    plt.ylabel('V-$V_{baseline}$ [mV]', fontsize = 36)
+    #plt.title('Mean and Std DeltaV dor different concentrations (last 5 values of the last 6 steps)')
+    plt.legend( fontsize=22, frameon=False)
+    #plt.grid()
+    if folder : plt.savefig(folder+"\meanL_R_diff_last5-"+couple+".png",bbox_inches='tight')
     
 def calculate_mean_std(Nlastvalues,Nvalidsteps,df_list, column):
     """
@@ -181,7 +196,7 @@ def calculate_mean_std(Nlastvalues,Nvalidsteps,df_list, column):
     last_values = np.array([subdf[column].iloc[-Nlastvalues:].values for subdf in df_list[-Nvalidsteps:]])
     mean = np.mean(last_values)
     std = np.std(np.mean(last_values, axis=1))
-    return mean, std
+    return [mean, std]
    
     
 def calculate_vth(datax,datay, plot = None):
@@ -198,15 +213,15 @@ def calculate_vth(datax,datay, plot = None):
     IdS_derivative = np.gradient(sqrty, datax)
     # Find the max derivative point
     index_max_derivative = np.argmax(IdS_derivative)
-    vgs_max_derivative = vgs[index_max_derivative]
+    vgs_max_derivative = datax[index_max_derivative]
 
     # Compute Vth using the linear extrapolation with y = 0 (IdS = 0)
     Vth = -sqrty[index_max_derivative]/np.max(IdS_derivative)+vgs_max_derivative
     
     if plot:
-        plt.plot(vgs, tangent_equation, 'g--', label='Tangente')
+        plt.plot(datax, tangent_equation, 'g--', label='Tangente')
         # Plot della curva IdS vs vgs e del punto di massima derivata
-        plt.plot(vgs, IdS_sqrt, 'bo', label='sqroot(IdS)')
+        plt.plot(datax, IdS_sqrt, 'bo', label='sqroot(IdS)')
         plt.xlabel('$v_{gs}$ (V)')
         plt.ylabel('$IdS$ (A)')
         plt.title('Curva IdS vs vgs')
@@ -224,7 +239,7 @@ def calculate_vth(datax,datay, plot = None):
         
     return Vth
 
-def save_table_xlsx(data, name_columns = None, TOT, name_file):
+def save_table_xlsx(data, TOT, name_file):
     """
     save the data in an xlsx file of the type 'mmddyyyy-name_file' in the main path
     input:
@@ -237,3 +252,13 @@ def save_table_xlsx(data, name_columns = None, TOT, name_file):
     table = pd.DataFrame(data).transpose().rename(columns = {0: 'Mean_L [mV]', 1: 'std_L [mV]', 2: 'Mean_R [mV]', 3: 'std_R [mV]', 4: 'Diff |Vl-VR| [mV]', 5: 'std diff [mV]'})
     table.to_excel(path+"\_"+name_file+".xlsx")
     return
+
+
+def slope_egofet(data, slope_point = None):
+    if slope_point:
+        return np.gradient(data['Ids'],data['Vgs'])[slope_point]
+    else:
+        return np.gradient(data['Ids'],data['Vgs'])[np.max(data['Ids'])]
+    
+    
+    
