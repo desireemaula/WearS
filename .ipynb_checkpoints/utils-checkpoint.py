@@ -6,8 +6,13 @@ import seaborn as sns
 import pandas as pd
 from datetime import datetime
 import numpy as np
+from scipy.signal import butter, filtfilt
+from scipy.signal import savgol_filter, medfilt
 
-#os.chdir(r"C:\Users\Desi\Desktop\TesiStanford\keithley_results")
+col_L = '#1E5986'
+col_R = '#BF8F00'
+col_diff = "#FF8080"
+#os.chdir(r"C:\Users\Chuanzhen Zhao\Desktop\Results")
 path =  os.getcwd()
 
 def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None):
@@ -21,12 +26,16 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None)
     - step (str): Description of the step.
     - DUT (str): Description of the DUT.
     - TOT (str): Description of the TOT.
-    - mode (int, optional): Mode for plotting. Default is 1. if mode = 2 -> VDL and VDR are plotted. If mode = 2: VDL, VDR, VDL-VDR are plotted
+    - mode (int): Mode for plotting. Default is 1. if mode = 2 -> VDL and VDR are plotted. If mode = 2: VDL, VDR, VDL-VDR are plotted (diode-connection test)
+                                     If mode is 4 -> egofet test
     - folder (str, optional): Folder to save the plot image. Default is None.
 
     Returns:
     - None
     """
+    colors_L = sns.color_palette("Blues",25)
+    colors_R = sns.color_palette("YlOrBr",25)
+    colors_diff = sns.light_palette("seagreen",25)
     
     # If list_df is a list
     if isinstance(list_df, list):
@@ -39,9 +48,7 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None)
     else:
         raise ValueError("Invalid input type for list_df. Expected list or dict.")
         
-    colors_L = sns.color_palette("Blues",25)
-    colors_R = sns.color_palette("YlOrBr",25)
-    colors_diff = sns.light_palette("seagreen",25)
+    
 
     diff_in_time_grouped = diff_in_time.groupby(diff_in_time.index)
     threshold = diff_in_time.index.max()
@@ -55,6 +62,7 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None)
             (abs(diff_in_time_max[0][i*int(len(diff_in_time_max[0])/numberoftests):(1+i)*int(len(diff_in_time_max[0])/numberoftests)]['VDL']
             -diff_in_time_max[0][i*int(len(diff_in_time_max[0])/numberoftests):(1+i)*int(len(diff_in_time_max[0])/numberoftests)]['VDR'])
             -abs(diff_in_time_max[0].iloc[0]['VDL']-diff_in_time_max[0].iloc[0]['VDR']))*1000, label = conc[i], color = colors_diff[10+i] )
+            plt.title('Change of Max values in time')
         if mode == 2 or mode == 3:
             ax.scatter(range(i*int(len(diff_in_time_max[0])/numberoftests),(1+i)*int(len(diff_in_time_max[0])/numberoftests)), (diff_in_time_max[0]
             [i*int(len(diff_in_time_max[0])/numberoftests):(1+i)*int(len(diff_in_time_max[0])/numberoftests)]['VDL']-diff_in_time_max[0].iloc[0]['VDL'])*1000,
@@ -62,11 +70,15 @@ def plot_max_values(list_df, conc, couple,step,DUT,TOT, mode = 1, folder = None)
             ax.scatter(range(i*int(len(diff_in_time_max[0])/numberoftests),(1+i)*int(len(diff_in_time_max[0])/numberoftests)), (diff_in_time_max[0]
             [i*int(len(diff_in_time_max[0])/numberoftests):(1+i)*int(len(diff_in_time_max[0])/numberoftests)]['VDR']-diff_in_time_max[0].iloc[0]['VDR'])*1000,
             label = 'Right-'+conc[i], color = colors_R[10+i])
+            plt.title('Change of Max values in time')
+        if mode == 4:
+            plt.title('Calibrated response in time')
+            ax.scatter(range(len(diff_in_time)),diff_in_time, color = colors_R[10+i])
 
     
     ax.set_xlabel('Index')
     ax.set_ylabel('Value [mV]')
-    plt.title('Change of Max values in time')
+    
     plt.grid()
     plt.legend()
     if folder : plt.savefig(folder+"\plotmaxvalues-"+couple+"-"+DUT+TOT+".jpeg")
@@ -110,6 +122,7 @@ def save_xls(list_df, device_name,type_of_test,additional_comment= None, mode = 
     - directory (str): Name of the directory where the Excel file is saved.
     """  
     today = datetime.now()
+    path = os.getcwd()
     if os.path.isdir(today.strftime('%m%d%Y')+'-'+device_name+'-'+type_of_test)!=1:
         directory = create_folder(device_name,type_of_test)
         print('The directory doesn\'t exist')
@@ -207,37 +220,139 @@ def calculate_vth(datax,datay, plot = None):
         datay = Y axis data (IDS) -> non squared! 
         
     """
-    sqrty =  np.sqrt(datay)
     
-    IdS_derivative = np.gradient(sqrty, datax)
-    # Find the max derivative point
-    index_max_derivative = np.argmax(IdS_derivative)
-    vgs_max_derivative = datax[index_max_derivative]
+    IdS_sqrt = np.sqrt(datay)
+    vgs = datax
+    
+    #applying butter filter to eliminate the measurement noise
+    cutoff_freq = 20
+    # Nyquist frequency
+    nyquist_freq = 0.5 * len(IdS_sqrt)
+    normalized_cutoff_freq = cutoff_freq / nyquist_freq
+    print(normalized_cutoff_freq)
+    # coeficcient for the filter
+    b, a = butter(5, normalized_cutoff_freq, btype='low', analog=False)
+    # applying filter
+    vgs = filtfilt(b, a, vgs)
+    
+    # applying the linear interpolation
+    IdS_sqrt_derivative = np.gradient(IdS_sqrt,vgs)
 
-    # Compute Vth using the linear extrapolation with y = 0 (IdS = 0)
-    Vth = -sqrty[index_max_derivative]/np.max(IdS_derivative)+vgs_max_derivative
+    index_max_derivative = np.argmax(IdS_sqrt_derivative)
+    vgs_max_derivative = vgs[index_max_derivative]
+    IdS_max_derivative = IdS_sqrt[index_max_derivative]
+    
+    # Computing Vth using the linear interpolation with y = 0 (IdS = 0)
+    Vth = -IdS_sqrt[index_max_derivative]/np.max(IdS_sqrt_derivative)+vgs_max_derivative
+    tangent_equation = IdS_max_derivative + IdS_sqrt_derivative[index_max_derivative] * (vgs - vgs_max_derivative)
+
+
     
     if plot:
-        plt.plot(datax, tangent_equation, 'g--', label='Tangente')
-        # Plot della curva IdS vs vgs e del punto di massima derivata
-        plt.plot(datax, IdS_sqrt, 'bo', label='sqroot(IdS)')
+        fig, ax1 = plt.subplots(figsize=(8, 5))
+        plt.plot(vgs, tangent_equation, '--',color = '#BEB8DC', label='Tangent Line', linewidth = 2)
+        plt.plot(vgs, IdS_sqrt, color = '#FA7F6F', label='$\sqrt{I_{DS}}$)', linewidth = 2)
+        plt.plot(datax, IdS_sqrt,'--', color = 'gray', label='Non Filtered', linewidth = 2)
+        plt.plot(vgs, IdS_sqrt_derivative, color = '#FFBE7A', label='derivative', linewidth = 2)
         plt.xlabel('$v_{gs}$ (V)')
         plt.ylabel('$IdS$ (A)')
         plt.title('Curva IdS vs vgs')
-        plt.plot(vgs_max_derivative, IdS_max_derivative, 'ro', label=f'Point of Max derivate: {vgs_max_derivative:.2f} V')  # Punto di massima derivata
-        plt.plot(Vth, 0, 'mo', label=f'Vth: {Vth:.2f} V')  # Punto di massima derivata
+        plt.plot(vgs_max_derivative, IdS_max_derivative, marker="o", color = '#FA7F6F', label=f'Point of Max derivate: {vgs_max_derivative:.2f} V', linewidth = 3)  # ma derivative point
+        plt.plot(Vth, 0, color = '#8ECFC9',marker="o", label=f'Vth: {Vth:.2f} V', linewidth = 3) 
 
         plt.ylim(-0.0001, 0.0011)
         plt.xlabel('$v_{gs}$ (V)')
         plt.ylabel('$IdS$ (A)')
         plt.title('IdS vsVvgs Curve')
         plt.legend()
-        plt.grid(True)
+        #plt.grid(True)
         plt.show()
-
         
     return Vth
 
+def calculate_vth_secondder(datax,datay, plot = None):
+    """
+    Compute the Vth starting from a VGS-IDS curve in the saturation regime with linear extrapolation
+    and plot the corresponding curves if plot = None
+    Input:
+        datax = X axis data (VGS) 
+        datay = Y axis data (IDS) -> non squared! 
+        
+    """
+
+
+    IdS_sqrt = np.sqrt(datay)
+    vgs = datax
+    
+
+    #applying 5th order butterworth filter to eliminate the measurement noise
+    cutoff_freq = 16
+
+    # Nyquist frequency
+    nyquist_freq = 0.5 * len(IdS_sqrt)
+    normalized_cutoff_freq = cutoff_freq / nyquist_freq
+
+    # coeficcient for the filter
+    b, a = butter(5, normalized_cutoff_freq, btype='low', analog=False)
+
+    # applying filter
+    vgs = filtfilt(b, a, vgs)
+    #IdS_filtered = savgol_filter(IdS_, window_length=15, polyorder=3, mode='nearest')
+
+    # max derivative point
+    IdS_ = np.gradient(np.gradient(IdS_sqrt,vgs),vgs)
+
+
+
+    index_max_derivative = np.argmax(IdS_[:-10])
+    Vth = vgs[index_max_derivative]
+    
+    if plot:
+
+        fig, ax1 = plt.subplots(figsize=(11.69, 8.26))
+        ax2 = ax1.twinx()
+
+        # Set the width of the margins
+        ax1.spines['bottom'].set_linewidth(2)
+        ax1.spines['top'].set_linewidth(2)
+        ax1.spines['left'].set_linewidth(3.5)
+        ax2.spines['right'].set_linewidth(3.5)
+        
+        ax1.spines['left'].set_color(col_L)
+        ax2.spines['right'].set_color(col_R)
+
+        # Plot the curves
+        ax1.plot(vgs, IdS_sqrt, color=col_L, linewidth=3)
+        ax1.plot(datax, IdS_sqrt, '--', color='grey', label='Non Filtered $\sqrt{I_{D}}$', linewidth=2)
+        ax2.plot(vgs, IdS_, '--', color=col_R, linewidth=3)
+
+        # Set the parameters of the labels and margins
+        ax1.tick_params(axis='y', width=1.5, length=8, labelsize=26, labelcolor=col_L, colors=col_L)
+        ax1.tick_params(axis='x', width=1.5, length=8, labelsize=26)
+        ax2.tick_params(axis='y', width=1.5, length=8, labelsize=26, labelcolor=col_R, colors=col_R)
+
+        # Set the axis labels
+        ax1.set_xlabel('$V_{SD}$ (V)', fontsize=26)
+        ax1.set_ylabel('$\sqrt{I_{DS}}$ $[\sqrt{A}]$', fontsize=26, color=col_L)
+        ax2.set_ylabel(r'$\frac{d^2{\sqrt{I_{DS}}}}{dV_{SD}^2}$ $[\sqrt{A}]$', fontsize=26, color=col_R)
+
+        # Set the axis limits
+        ax1.set_ylim(-0.0001, 0.0011)
+
+        # Plotof the vth marker
+        ax2.plot(Vth, IdS_[index_max_derivative], marker="o", color='#809c13', label='Vth', markersize=10)
+
+        # create the legend
+        lines, labels = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines + lines2, labels + labels2, loc='lower right', fontsize=22, frameon=False)
+
+
+        plt.savefig(r"C:\Users\Desi\Desktop\TesiStanford\ImagesThesis\SecondDerivative.jpeg",bbox_inches='tight', dpi = 1200)
+        plt.show()
+        
+    return Vth
+    
 def save_table_xlsx(data, TOT, name_file):
     """
     save the data in an xlsx file of the type 'mmddyyyy-name_file' in the main path
@@ -251,3 +366,18 @@ def save_table_xlsx(data, TOT, name_file):
     table = pd.DataFrame(data).transpose().rename(columns = {0: 'Mean_L [mV]', 1: 'std_L [mV]', 2: 'Mean_R [mV]', 3: 'std_R [mV]', 4: 'Diff |Vl-VR| [mV]', 5: 'std diff [mV]'})
     table.to_excel(path+"\_"+name_file+".xlsx")
     return
+
+
+def calibrated_response_egofet(data, slope_point = None):
+    if slope_point:
+        slope =  np.gradient(data['Ids'],data['Vgs'])[data[data['Vgs']==slope_point].index][0]
+        ids = data[data['Vgs']==slope_point]['Ids']
+    else:
+        slope =  np.gradient(data['Ids'],data['Vgs'])[np.max(data['Ids'])]
+        ids = np.max(data['Ids'])
+    
+    return ids/slope
+
+    
+    
+    
