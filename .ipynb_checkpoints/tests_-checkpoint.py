@@ -47,10 +47,14 @@ def sensing_test(L, R, C, smu,k, conc, diode_df_dict, diode_dict_list, mean_std,
     Nlastvalues = 5
     diode_df_list = []
     
+    diode_start = '0' # value where to start sweeping from
+    diode_stop = '300E-09' # value where to stop sweeping
+    diode_step = '5E-09' # step of the sweeping
+    
     # Loop for 20 runs
     for i in range(20):
         print('Run #:',i+1)
-        diode_df_list.append(smu.diode_connection(L, R, C, '0', '300E-09', '5E-09'))
+        diode_df_list.append(smu.diode_connection(L, R, C, diode_start, diode_stop, diode_step))
         time.sleep(10) # Wait for 10 seconds before the next run
 
     data_save = pd.concat(diode_df_list)  # saving the 20 sweeps in one df
